@@ -89,14 +89,14 @@ window.DISTRICTS = [
 ];
 
 window.CATEGORIES = [
-  { id: "erasmus",      color: "blue",   icon: "globe",  ro: "Erasmus+ și schimburi internaționale", en: "Erasmus+ & international exchanges", short: { ro: "Erasmus+", en: "Erasmus+" } },
-  { id: "volunteering", color: "green",  icon: "heart",  ro: "Voluntariat",                          en: "Volunteering",                       short: { ro: "Voluntariat", en: "Volunteering" } },
-  { id: "workshops",    color: "yellow", icon: "bulb",   ro: "Ateliere și training-uri",             en: "Workshops & training",               short: { ro: "Ateliere", en: "Workshops" } },
-  { id: "scholarships", color: "blue",   icon: "cap",    ro: "Burse și programe educaționale",       en: "Scholarships & education",           short: { ro: "Burse", en: "Scholarships" } },
-  { id: "competitions", color: "red",    icon: "trophy", ro: "Concursuri și provocări",              en: "Competitions & challenges",          short: { ro: "Concursuri", en: "Competitions" } },
-  { id: "conferences",  color: "green",  icon: "mic",    ro: "Conferințe și forumuri de tineret",    en: "Youth conferences & forums",         short: { ro: "Forumuri", en: "Forums" } },
-  { id: "careers",      color: "red",    icon: "case",   ro: "Stagii și carieră",                    en: "Internships & careers",              short: { ro: "Carieră", en: "Careers" } },
-  { id: "local",        color: "yellow", icon: "star",   ro: "Evenimente și activități locale",      en: "Local events & activities",          short: { ro: "Local", en: "Local" } }
+  { id: "erasmus",      color: "violet",   icon: "globe",  ro: "Erasmus+ și schimburi internaționale", en: "Erasmus+ & international exchanges", short: { ro: "Erasmus+", en: "Erasmus+" } },
+  { id: "volunteering", color: "lavender",  icon: "heart",  ro: "Voluntariat",                          en: "Volunteering",                       short: { ro: "Voluntariat", en: "Volunteering" } },
+  { id: "workshops",    color: "lilac", icon: "bulb",   ro: "Ateliere și training-uri",             en: "Workshops & training",               short: { ro: "Ateliere", en: "Workshops" } },
+  { id: "scholarships", color: "violet",   icon: "cap",    ro: "Burse și programe educaționale",       en: "Scholarships & education",           short: { ro: "Burse", en: "Scholarships" } },
+  { id: "competitions", color: "plum",    icon: "trophy", ro: "Concursuri și provocări",              en: "Competitions & challenges",          short: { ro: "Concursuri", en: "Competitions" } },
+  { id: "conferences",  color: "lavender",  icon: "mic",    ro: "Conferințe și forumuri de tineret",    en: "Youth conferences & forums",         short: { ro: "Forumuri", en: "Forums" } },
+  { id: "careers",      color: "plum",    icon: "case",   ro: "Stagii și carieră",                    en: "Internships & careers",              short: { ro: "Carieră", en: "Careers" } },
+  { id: "local",        color: "lilac", icon: "star",   ro: "Evenimente și activități locale",      en: "Local events & activities",          short: { ro: "Local", en: "Local" } }
 ];
 
 /* -------------------------------------------------------------------------

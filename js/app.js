@@ -141,7 +141,6 @@
     <article class="card card--${c.color} reveal" data-id="${esc(o.id)}">
       <div class="card__art" aria-hidden="true">
         <span class="card__icon">${icon(c.icon)}</span>
-        <span class="card__blob"></span>
         ${dist}
       </div>
       <div class="card__body">
@@ -210,8 +209,7 @@
 
     return `
     <section class="hero">
-      <div class="hero__bg" aria-hidden="true"><span class="orb orb--b"></span><span class="orb orb--g"></span><span class="orb orb--y"></span><span class="orb orb--r"></span></div>
-      <div class="wrap hero__grid">
+            <div class="wrap hero__grid">
         <div class="hero__copy">
           <p class="eyebrow">${icon("sparkle")}${esc(t("hero.eyebrow"))}</p>
           <h1 class="display">${esc(t("hero.title"))}</h1>
@@ -245,7 +243,7 @@
           <p class="lead lead--dark">${esc(t("mission.lead"))}</p>
         </div>
         <div class="pillars">
-          ${[["p1", "search", "blue"], ["p2", "pin", "green"], ["p3", "globe", "yellow"], ["p4", "check", "red"]].map(([k, ic, col]) => `
+          ${[["p1", "search", "violet"], ["p2", "pin", "lavender"], ["p3", "globe", "lilac"], ["p4", "check", "plum"]].map(([k, ic, col]) => `
           <div class="pillar pillar--${col} reveal"><span class="pillar__icon">${icon(ic)}</span><h3>${esc(t("mission." + k + ".t"))}</h3><p>${esc(t("mission." + k + ".d"))}</p></div>`).join("")}
         </div>
       </div>
@@ -411,7 +409,7 @@
   views.regions = function () {
     const d = region.district ? district(region.district) : null;
     return `
-    <section class="page-head page-head--green">
+    <section class="page-head page-head--lavender">
       <div class="wrap">
         <h1 class="h1">${esc(t("regions.title"))}</h1>
         <p class="lead lead--dark">${esc(t("regions.sub"))}</p>
@@ -555,7 +553,7 @@
   views.events = function () {
     const tbc = OPPS.filter((o) => !o.date && !o.month);
     return `
-    <section class="page-head page-head--yellow">
+    <section class="page-head page-head--lilac">
       <div class="wrap">
         <h1 class="h1">${esc(t("events.title"))}</h1>
         <p class="lead lead--dark">${esc(t("events.sub"))}</p>
@@ -694,7 +692,7 @@
   /* ---------- about */
   views.about = function () {
     return `
-    <section class="page-head page-head--red">
+    <section class="page-head page-head--plum">
       <div class="wrap narrow">
         <h1 class="h1">${esc(t("about.title"))}</h1>
         <p class="lead lead--dark">${esc(t("about.lead"))}</p>
@@ -714,7 +712,7 @@
       <div class="wrap">
         ${sectionHead(t("about.values"))}
         <div class="pillars">
-          ${[["v1", "heart", "red"], ["v2", "check", "blue"], ["v3", "star", "yellow"], ["v4", "users", "green"]].map(([k, ic, col]) => `
+          ${[["v1", "heart", "plum"], ["v2", "check", "violet"], ["v3", "star", "lilac"], ["v4", "users", "lavender"]].map(([k, ic, col]) => `
           <div class="pillar pillar--${col} reveal"><span class="pillar__icon">${icon(ic)}</span><h3>${esc(t("about." + k + ".t"))}</h3><p>${esc(t("about." + k + ".d"))}</p></div>`).join("")}
         </div>
       </div>
@@ -813,7 +811,7 @@
     const catOpts = CATS.map((c) => `<option value="${c.id}">${esc(L(c))}</option>`).join("");
     const distOpts = `<option value="">—</option><option value="online">${esc(t("shareForm.online"))}</option>` + districtOptions("", true, "").replace('<option value=""></option>', "");
     return `
-    <section class="page-head page-head--blue">
+    <section class="page-head page-head--violet">
       <div class="wrap">
         <h1 class="h1">${esc(t("shareForm.title"))}</h1>
         <p class="lead lead--dark">${esc(t("shareForm.sub"))}</p>
