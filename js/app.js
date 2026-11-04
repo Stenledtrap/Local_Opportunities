@@ -668,6 +668,7 @@
               <div><dt>${icon("user")}<span>${esc(t("detail.contactPerson"))}</span></dt><dd class="${o.contact ? "" : "tbc"}">${esc(o.contact || t("card.tbc"))}</dd></div>
             </dl>
             ${actionFor(o, true)}
+            ${(window.OPP_GEO || {})[o.id] ? `<a class="btn btn--soft btn--block" href="#/map?id=${esc(o.id)}">${icon("pin")}${esc(t("map.seeOnMap"))}</a>` : ""}
             <button class="btn btn--ghost btn--block" id="d-share">${icon("share")}${esc(t("detail.share"))}</button>
           </div>
         </aside>
@@ -846,11 +847,514 @@
     </section>`;
   };
 
+  /* ------------------------------------------------------------------ interactive map */
+  const MD_BOUNDS = [[45.35, 26.45], [48.6, 30.3]];
+  const mapState = { q: "", center: null, centerLabel: "", radius: "all", tab: "date", date: "all", cats: [], free: false, selected: null, pinMode: false, draft: null, panelTab: "details" };
+  let LM = null;          // Leaflet map instance
+  const wide = () => window.matchMedia("(min-width: 900px)").matches;
+  const fitOpts = () => ({ paddingTopLeft: [20, 20], paddingBottomRight: [wide() ? 400 : 20, 20] });
+  let markerLayer = null, radiusLayer = null, draftMarker = null;
+  const markers = {};
+
+  const isoMonth = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const communityPins = () => store.get("opp.pins", []);
+  const interests = () => store.get("opp.interest", []);
+
+  function mapItems() {
+    const geo = window.OPP_GEO || {};
+    const seen = {};
+    const items = OPPS.filter((o) => o.format === "local" && geo[o.id]).map((o) => {
+      // spread opportunities that share a locality so every pin can be tapped
+      const k = geo[o.id].join(",");
+      const n = (seen[k] = (seen[k] || 0) + 1) - 1;
+      // pins sharing a locality fan out sideways on screen, so each stays tappable at any zoom
+      return { o, at: geo[o.id], shift: n ? (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 30 : 0 };
+    });
+    communityPins().forEach((p) => items.push({ o: p, at: p.at, shift: 0 }));
+    return items;
+  }
+
+  function inMoldova(lat, lon) {
+    const ring = (window.MOLDOVA_OUTLINE || [])[0];
+    if (!ring) return true;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [yi, xi] = ring[i], [yj, xj] = ring[j];
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
+  function matchDate(o) {
+    const f = mapState.date;
+    if (f === "all") return true;
+    const key = o.date ? o.date.slice(0, 7) : o.month;
+    if (f === "tbc") return !key;
+    if (!key) return false;
+    const now = new Date();
+    if (f === "month") return key === isoMonth(now);
+    const end = new Date(now.getFullYear(), now.getMonth() + 3, 1);
+    return key >= isoMonth(now) && key < isoMonth(end);
+  }
+
+  function filteredMapItems() {
+    const q = norm(mapState.q).trim();
+    return mapItems().filter(({ o, at }) => {
+      if (mapState.cats.length && !mapState.cats.includes(o.cat)) return false;
+      if (mapState.free && o.cost !== "free") return false;
+      if (!matchDate(o)) return false;
+      if (mapState.center && mapState.radius !== "all" && km(mapState.center, at) > Number(mapState.radius)) return false;
+      if (q) {
+        const hay = norm([L(o.title), o.title.ro, o.title.en, L(o.desc), o.locality, o.district && district(o.district) ? district(o.district).name : ""].join(" "));
+        if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+      }
+      return true;
+    });
+  }
+
+  function placeLabel(o) {
+    if (o.source === "community") return [o.locality, o.district && district(o.district) ? district(o.district).name : ""].filter(Boolean).join(", ");
+    return `${L(o.venue)}${o.district ? ", " + district(o.district).name : ""}`;
+  }
+
+  views.map = function (params) {
+    const sel = params.get("id");
+    if (sel) mapState.selected = sel;
+    const localityNames = Array.from(new Set(DISTRICTS.flatMap((d) => [d.name].concat(d.loc)))).sort((a, b) => a.localeCompare(b, "ro"));
+    const offMap = OPPS.filter((o) => o.format !== "local").length;
+    const tabs = [["date", "calendar", t("map.tab.date")], ["type", "filter", t("map.tab.type")], ["more", "tag", t("map.tab.more")]];
+    return `
+    <div class="mapx">
+      <aside class="mx-panel" aria-label="${esc(t("map.filters"))}">
+        <div class="mx-head">
+          <h1 class="h3">${icon("pin")}${esc(t("map.title"))}</h1>
+          <p class="muted">${esc(t("map.sub"))}</p>
+        </div>
+
+        <section class="mx-box">
+          <div class="mx-box__head"><h2>${esc(t("map.location"))}</h2><button type="button" class="mx-link" id="mx-reset">${esc(t("map.resetAll"))}</button></div>
+          <form class="mx-loc" id="mx-loc-form">
+            <label class="sr-only" for="mx-loc">${esc(t("map.locPh"))}</label>
+            ${icon("search")}
+            <input id="mx-loc" list="mx-places" placeholder="${esc(t("map.locPh"))}" value="${esc(mapState.centerLabel)}" autocomplete="off">
+            <button class="mx-set" type="submit">${esc(t("map.set"))}</button>
+          </form>
+          <datalist id="mx-places">${localityNames.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+          <button type="button" class="mx-link mx-link--icon" id="mx-geo">${icon("nav")}${esc(t("regions.useLocation"))}</button>
+          <p class="mx-status" id="mx-status" aria-live="polite"></p>
+          <p class="mx-label" id="mx-radius-label">${esc(t("map.radius"))}</p>
+          <div class="mx-seg" role="radiogroup" aria-labelledby="mx-radius-label">
+            ${["10", "25", "50", "100", "all"].map((v) => `<button type="button" role="radio" data-radius="${v}" class="${mapState.radius === v ? "is-on" : ""}" aria-checked="${mapState.radius === v}">${v === "all" ? esc(t("map.all")) : v + " km"}</button>`).join("")}
+          </div>
+        </section>
+
+        <section class="mx-box">
+          <div class="mx-box__head"><h2>${esc(t("map.filters"))}</h2><span class="mx-hint">${esc(t("map.combine"))}</span></div>
+          <div class="mx-tabs" role="tablist">
+            ${tabs.map(([k, ic, lab]) => `<button type="button" role="tab" id="mx-tab-${k}" aria-controls="mx-pane-${k}" aria-selected="${mapState.tab === k}" class="${mapState.tab === k ? "is-on" : ""}" data-tab="${k}">${icon(ic)}${esc(lab)}</button>`).join("")}
+          </div>
+          <div class="mx-pane" role="tabpanel" id="mx-pane-date" aria-labelledby="mx-tab-date" ${mapState.tab === "date" ? "" : "hidden"}>
+            <div class="mx-grid2">
+              ${[["all", t("map.date.all")], ["month", t("map.date.month")], ["next3", t("map.date.next3")], ["tbc", t("card.tbc")]].map(([v, lab]) => `<button type="button" class="mx-opt ${mapState.date === v ? "is-on" : ""}" data-date="${v}" aria-pressed="${mapState.date === v}">${esc(lab)}</button>`).join("")}
+            </div>
+          </div>
+          <div class="mx-pane" role="tabpanel" id="mx-pane-type" aria-labelledby="mx-tab-type" ${mapState.tab === "type" ? "" : "hidden"}>
+            <div class="mx-cats">
+              ${CATS.map((c) => `<button type="button" class="mx-cat ${mapState.cats.includes(c.id) ? "is-on" : ""}" data-cat="${c.id}" aria-pressed="${mapState.cats.includes(c.id)}">${icon(c.icon)}${esc(L(c.short))}</button>`).join("")}
+            </div>
+          </div>
+          <div class="mx-pane" role="tabpanel" id="mx-pane-more" aria-labelledby="mx-tab-more" ${mapState.tab === "more" ? "" : "hidden"}>
+            <label class="mx-check"><input type="checkbox" id="mx-free" ${mapState.free ? "checked" : ""}><span>${esc(t("f.cost.free"))}</span></label>
+            <label class="sr-only" for="mx-q">${esc(t("f.search"))}</label>
+            <div class="mx-loc mx-loc--plain">${icon("search")}<input id="mx-q" type="search" value="${esc(mapState.q)}" placeholder="${esc(t("f.search"))}" autocomplete="off"></div>
+          </div>
+        </section>
+
+        <p class="mx-count" id="mx-count" aria-live="polite"></p>
+        <div class="mx-list" id="mx-list"></div>
+        <a class="mx-offmap" href="#/explore?format=online">${icon("monitor")}${esc(t("map.offmap", { n: offMap }))}${icon("chevR")}</a>
+
+        <div class="mx-foot">
+          <button type="button" class="btn btn--primary btn--block" id="mx-pin">${icon("plus")}${esc(t("map.pinBtn"))}</button>
+        </div>
+      </aside>
+
+      <div class="mx-mapwrap">
+        <div id="mx-map" class="mx-map" role="region" aria-label="${esc(t("map.title"))}"></div>
+        <div class="mx-banner" id="mx-banner" hidden>${icon("pin")}<span>${esc(t("map.pinHint"))}</span><button type="button" class="btn btn--sm btn--ghost" id="mx-pin-cancel">${esc(t("map.cancel"))}</button></div>
+        <aside class="mx-detail" id="mx-detail" hidden aria-live="polite"></aside>
+      </div>
+    </div>`;
+  };
+
+  function pinIcon(o, active, shift = 0) {
+    const c = cat(o.cat) || CATS[0];
+    const cls = `mpin mpin--${c.color}${active ? " is-active" : ""}${o.source === "community" ? " is-community" : ""}`;
+    return window.L.divIcon({ className: "mpin-wrap", html: `<span class="${cls}"><span class="mpin__in">${icon(c.icon)}</span></span>`, iconSize: [38, 46], iconAnchor: [19 - shift, 44] });
+  }
+
+  function renderMapResults(fit) {
+    const list = filteredMapItems();
+    $("#mx-count").textContent = list.length === 1 ? t("map.found1") : t("map.foundN", { n: list.length });
+    $("#mx-list").innerHTML = list.length ? list.map(({ o }) => {
+      const c = cat(o.cat) || CATS[0];
+      return `<button type="button" class="mx-row ${mapState.selected === o.id ? "is-on" : ""}" data-id="${esc(o.id)}">
+        <span class="mx-row__icon mx-row__icon--${c.color}">${icon(c.icon)}</span>
+        <span class="mx-row__text"><strong>${esc(L(o.title))}</strong><span>${icon("calendar")}${esc(fmtWhen(o))}</span><span>${icon("pin")}${esc(placeLabel(o))}</span></span>
+      </button>`;
+    }).join("") : `<div class="hint">${icon("info")}<p>${esc(t("f.none.d"))}</p></div>`;
+    $$(".mx-row").forEach((b) => b.addEventListener("click", () => selectItem(b.dataset.id, true)));
+
+    if (!LM) return;
+    markerLayer.clearLayers();
+    Object.keys(markers).forEach((k) => delete markers[k]);
+    list.forEach(({ o, at, shift }) => {
+      const m = window.L.marker(at, { icon: pinIcon(o, mapState.selected === o.id, shift), title: L(o.title), riseOnHover: true, keyboard: true });
+      m.on("click", () => selectItem(o.id, false));
+      m.addTo(markerLayer);
+      markers[o.id] = m;
+    });
+    if (radiusLayer) { radiusLayer.remove(); radiusLayer = null; }
+    if (mapState.center) {
+      const style = { className: "mx-radius", weight: 1.5, fillOpacity: 0.07, interactive: false };
+      radiusLayer = window.L.layerGroup([
+        mapState.radius !== "all" ? window.L.circle(mapState.center, Object.assign({ radius: Number(mapState.radius) * 1000 }, style)) : null,
+        window.L.circleMarker(mapState.center, { className: "mx-center", radius: 7, weight: 3, fillOpacity: 1, interactive: false })
+      ].filter(Boolean)).addTo(LM);
+      if (fit) {
+        if (mapState.radius !== "all") LM.flyToBounds(radiusLayer.getLayers()[0].getBounds(), Object.assign(fitOpts(), { duration: reduceMotion() ? 0 : 0.6 }));
+        else LM.flyTo(mapState.center, 9, { duration: reduceMotion() ? 0 : 0.6 });
+      }
+    }
+  }
+
+  function findItem(id) {
+    return mapItems().find((x) => x.o.id === id);
+  }
+
+  function selectItem(id, fly) {
+    const it = findItem(id);
+    if (!it) return;
+    mapState.selected = id;
+    mapState.panelTab = "details";
+    history.replaceState(null, "", "#/map?id=" + encodeURIComponent(id));
+    Object.keys(markers).forEach((k) => { const x = findItem(k); markers[k].setIcon(pinIcon(x.o, k === id, x.shift)); });
+    $$(".mx-row").forEach((r) => r.classList.toggle("is-on", r.dataset.id === id));
+    if (LM) {
+      if (fly) {
+        // centre the pin in the part of the map the details panel leaves free
+        const z = Math.max(LM.getZoom(), 10);
+        const off = wide() ? 200 : 0, offY = wide() ? 0 : -LM.getSize().y * 0.22;
+        const target = LM.unproject(LM.project(it.at, z).add([off, -offY]), z);
+        LM.flyTo(target, z, { duration: reduceMotion() ? 0 : 0.6 });
+      } else if (wide()) {
+        const pt = LM.latLngToContainerPoint(it.at), limit = LM.getSize().x - 420;
+        if (pt.x > limit) LM.panBy([pt.x - limit + 60, 0], { duration: reduceMotion() ? 0 : 0.4 });
+      }
+    }
+    renderDetail();
+  }
+
+  function closeDetail() {
+    mapState.selected = null;
+    history.replaceState(null, "", "#/map");
+    const d = $("#mx-detail"); if (d) d.hidden = true;
+    Object.keys(markers).forEach((k) => { const x = findItem(k); markers[k].setIcon(pinIcon(x.o, false, x.shift)); });
+    $$(".mx-row").forEach((r) => r.classList.remove("is-on"));
+  }
+
+  function detailRow(ic, label, value, tbc) {
+    return `<div class="mx-drow"><span class="mx-drow__icon">${icon(ic)}</span><div>${label ? `<small>${esc(label)}</small>` : ""}<p class="${tbc ? "tbc" : ""}">${value}</p></div></div>`;
+  }
+
+  function renderDetail() {
+    const box = $("#mx-detail");
+    const it = findItem(mapState.selected);
+    if (!box || !it) return;
+    const o = it.o;
+    const c = cat(o.cat) || CATS[0];
+    const isCommunity = o.source === "community";
+    const liked = interests().includes(o.id);
+    const link = location.href.split("#")[0] + (isCommunity ? "#/map?id=" + encodeURIComponent(o.id) : "#/o/" + encodeURIComponent(o.id));
+    const time = o.time || (o.date ? null : null);
+    box.hidden = false;
+    box.innerHTML = `
+      <div class="mx-dhead">
+        <span class="mx-dhead__icon mx-row__icon--${c.color}">${icon(c.icon)}</span>
+        <div class="mx-dhead__text"><h2>${esc(L(o.title))}</h2><small>${esc(L(c.short))}${o.district && district(o.district) ? " · " + esc(district(o.district).name) : ""}</small></div>
+        <button type="button" class="icon-btn icon-btn--sm" id="mx-close" aria-label="${esc(t("nav.close"))}">${icon("x")}</button>
+      </div>
+      <div class="mx-dtabs" role="tablist">
+        <button type="button" role="tab" data-ptab="details" aria-selected="${mapState.panelTab === "details"}" class="${mapState.panelTab === "details" ? "is-on" : ""}">${esc(t("map.details"))}</button>
+        <button type="button" role="tab" data-ptab="share" aria-selected="${mapState.panelTab === "share"}" class="${mapState.panelTab === "share" ? "is-on" : ""}">${esc(t("detail.share"))}</button>
+      </div>
+      <div class="mx-dbody" ${mapState.panelTab === "details" ? "" : "hidden"}>
+        ${isCommunity ? `<div class="notice notice--demo">${icon("info")}<p>${esc(t("map.communityNote"))}</p></div>` : ""}
+        ${o.source === "demo" ? `<div class="notice notice--demo">${icon("info")}<p>${esc(t("detail.demoNote"))}</p></div>` : ""}
+        <p class="mx-desc">${esc(L(o.full || o.desc))}</p>
+        ${detailRow("calendar", "", esc(fmtWhen(o)), !o.date && !o.month)}
+        ${detailRow("clock", "", esc(time || t("card.tbc")), !time)}
+        ${detailRow("pin", "", esc(placeLabel(o)), false)}
+        ${detailRow("building", t("map.hosted"), esc(o.organizer || t("card.tbc")), !o.organizer)}
+        ${detailRow("tag", t("map.entry"), esc(fmtCost(o) + " · " + t("card.agesv", { a: o.ages[0], b: o.ages[1] })), !o.cost)}
+        ${detailRow("mail", t("card.contact"), esc(o.contact || t("card.tbc")), !o.contact)}
+        ${isCommunity ? "" : detailRow("arrowR", t("map.more"), `<a href="#/o/${esc(o.id)}">${esc(t("map.fullPage"))}</a>`, false)}
+        <div class="mx-engage">
+          <small>${esc(t("map.engagement"))}</small>
+          <div class="mx-engage__row">
+            <button type="button" class="mx-chipbtn ${liked ? "is-on" : ""}" id="mx-like" aria-pressed="${liked}">${icon("heart")}${esc(liked ? t("map.interested") : t("map.interest"))}</button>
+            ${isCommunity ? `<button type="button" class="mx-chipbtn" id="mx-delete">${icon("x")}${esc(t("map.deletePin"))}</button>` : ""}
+          </div>
+          <p class="mx-small">${esc(t("map.interestNote"))}</p>
+        </div>
+      </div>
+      <div class="mx-dbody" ${mapState.panelTab === "share" ? "" : "hidden"}>
+        <p class="mx-desc">${esc(t("map.shareText"))}</p>
+        <label class="sr-only" for="mx-share-url">URL</label>
+        <input class="mx-url" id="mx-share-url" readonly value="${esc(link)}">
+        <button type="button" class="btn btn--primary btn--block" id="mx-copy">${icon("share")}${esc(t("map.copy"))}</button>
+      </div>`;
+    $("#mx-close").addEventListener("click", closeDetail);
+    $$("[data-ptab]", box).forEach((b) => b.addEventListener("click", () => { mapState.panelTab = b.dataset.ptab; renderDetail(); }));
+    const like = $("#mx-like");
+    if (like) like.addEventListener("click", () => {
+      const all = interests(); const i = all.indexOf(o.id);
+      if (i >= 0) all.splice(i, 1); else all.push(o.id);
+      store.set("opp.interest", all); renderDetail();
+    });
+    const del = $("#mx-delete");
+    if (del) del.addEventListener("click", () => {
+      store.set("opp.pins", communityPins().filter((p) => p.id !== o.id));
+      closeDetail(); renderMapResults(); toast(t("map.deleted"));
+    });
+    const copy = $("#mx-copy");
+    if (copy) copy.addEventListener("click", () => {
+      const inp = $("#mx-share-url");
+      const done = () => toast(t("detail.copied"));
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inp.value).then(done, () => { inp.select(); });
+      else inp.select();
+    });
+  }
+
+  /* --- pinning an event */
+  function startPinMode() {
+    mapState.pinMode = true;
+    $("#mx-banner").hidden = false;
+    $(".mx-mapwrap").classList.add("is-pinning");
+    closeDetail();
+    if (window.matchMedia("(max-width: 899px)").matches) $(".mx-mapwrap").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+  }
+  function stopPinMode() {
+    mapState.pinMode = false;
+    const b = $("#mx-banner"); if (b) b.hidden = true;
+    const w = $(".mx-mapwrap"); if (w) w.classList.remove("is-pinning");
+    if (draftMarker) { draftMarker.remove(); draftMarker = null; }
+    const d = $("#mx-detail"); if (d && !mapState.selected) d.hidden = true;
+  }
+
+  function placeDraft(latlng) {
+    if (!inMoldova(latlng.lat, latlng.lng)) { toast(t("map.outside")); return; }
+    if (draftMarker) draftMarker.setLatLng(latlng);
+    else {
+      draftMarker = window.L.marker(latlng, { draggable: true, icon: window.L.divIcon({ className: "mpin-wrap", html: `<span class="mpin mpin--draft"><span class="mpin__in">${icon("plus")}</span></span>`, iconSize: [38, 46], iconAnchor: [19, 44] }) }).addTo(LM);
+      draftMarker.on("dragend", () => { const p = draftMarker.getLatLng(); if (!inMoldova(p.lat, p.lng)) toast(t("map.outside")); updateDraftPlace(); });
+    }
+    $("#mx-banner").hidden = true;
+    renderPinForm();
+  }
+
+  function updateDraftPlace() {
+    const p = draftMarker.getLatLng();
+    const d = nearestDistrict(p.lat, p.lng);
+    const out = $("#p-district-label");
+    if (out) out.textContent = d.name;
+    const hid = $("#p-district"); if (hid) hid.value = d.id;
+  }
+
+  function renderPinForm() {
+    const box = $("#mx-detail");
+    const p = draftMarker.getLatLng();
+    const d = nearestDistrict(p.lat, p.lng);
+    box.hidden = false;
+    box.innerHTML = `
+      <div class="mx-dhead">
+        <span class="mx-dhead__icon mx-row__icon--violet">${icon("plus")}</span>
+        <div class="mx-dhead__text"><h2>${esc(t("map.pinTitle"))}</h2><small>${icon("pin")}<span id="p-district-label">${esc(d.name)}</span> · ${esc(t("map.dragHint"))}</small></div>
+        <button type="button" class="icon-btn icon-btn--sm" id="p-cancel" aria-label="${esc(t("map.cancel"))}">${icon("x")}</button>
+      </div>
+      <form class="mx-form" id="pin-form" novalidate>
+        <input type="hidden" id="p-district" name="district" value="${d.id}">
+        ${field("p-title", t("shareForm.title2"), "text", { required: true })}
+        ${field("p-cat", t("shareForm.cat"), "select", { required: true, options: `<option value="">—</option>` + CATS.map((c) => `<option value="${c.id}">${esc(L(c))}</option>`).join("") })}
+        ${field("p-locality", t("shareForm.locality"), "text", { attrs: `placeholder="${esc(d.loc[0])}"` })}
+        <div class="mx-form__two">
+          ${field("p-date", t("shareForm.date"), "date")}
+          ${field("p-time", t("map.time"), "time")}
+        </div>
+        ${field("p-org", t("shareForm.org"), "text", { required: true })}
+        ${field("p-contact", t("map.contactField"), "text", { required: true })}
+        ${field("p-cost", t("shareForm.cost"), "select", { options: `<option value="free">${esc(t("card.free"))}</option><option value="paid">${esc(t("card.paid"))}</option><option value="">${esc(t("card.tbc"))}</option>` })}
+        ${field("p-desc", t("shareForm.desc"), "textarea", { required: true, rows: 3 })}
+        <div class="field field--check">
+          <label><input type="checkbox" id="p-consent" name="consent" required><span>${esc(t("shareForm.consent"))}</span></label>
+          <span class="field__err" id="p-consent-err" aria-live="polite"></span>
+        </div>
+        <button class="btn btn--primary btn--block" type="submit">${icon("pin")}${esc(t("map.savePin"))}</button>
+        <p class="note">${icon("info")}${esc(t("map.pinNote"))}</p>
+      </form>`;
+    $("#p-cancel").addEventListener("click", stopPinMode);
+    const form = $("#pin-form");
+    $$("input,textarea,select", form).forEach((el) => {
+      el.addEventListener("blur", () => { if (el.value) validateField(el); });
+      el.addEventListener("input", () => { if (el.getAttribute("aria-invalid") === "true") validateField(el); });
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const els = $$("input:not([type=hidden]),textarea,select", form);
+      if (!els.map(validateField).every(Boolean)) { const bad = els.find((x) => x.getAttribute("aria-invalid") === "true"); if (bad) bad.focus(); return; }
+      const ll = draftMarker.getLatLng();
+      if (!inMoldova(ll.lat, ll.lng)) { toast(t("map.outside")); return; }
+      const title = $("#p-title").value.trim(), desc = $("#p-desc").value.trim();
+      const date = $("#p-date").value || null;
+      const pin = {
+        id: "pin-" + Date.now().toString(36), source: "community", cat: $("#p-cat").value, format: "local",
+        district: $("#p-district").value, locality: $("#p-locality").value.trim() || null,
+        venue: { ro: $("#p-locality").value.trim() || "", en: $("#p-locality").value.trim() || "" },
+        title: { ro: title, en: title }, desc: { ro: desc, en: desc }, full: { ro: desc, en: desc },
+        learn: { ro: [], en: [] }, month: date ? date.slice(0, 7) : null, date, time: $("#p-time").value || null, deadline: null,
+        ages: [13, 19], cost: $("#p-cost").value || null, organizer: $("#p-org").value.trim(), contact: $("#p-contact").value.trim(), link: null,
+        covers: { accommodation: null, transport: null, meals: null }, at: [ll.lat, ll.lng], createdAt: new Date().toISOString()
+      };
+      const all = communityPins(); all.push(pin); store.set("opp.pins", all);
+      stopPinMode();
+      renderMapResults();
+      selectItem(pin.id, true);
+      toast(t("map.saved"));
+    });
+    $("#p-title").focus({ preventScroll: true });
+  }
+
+  function locateOnMap() {
+    const status = $("#mx-status");
+    if (!("geolocation" in navigator)) { status.textContent = t("regions.locError"); return; }
+    status.textContent = t("regions.locating");
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const d = nearestDistrict(pos.coords.latitude, pos.coords.longitude);
+      mapState.center = [pos.coords.latitude, pos.coords.longitude];
+      mapState.centerLabel = d.name;
+      if (mapState.radius === "all") setRadius("50");
+      $("#mx-loc").value = d.name;
+      status.textContent = t("regions.locFound", { d: d.name });
+      renderMapResults(true);
+    }, () => { status.textContent = t("regions.locError"); $("#mx-loc").focus(); }, { timeout: 10000, maximumAge: 600000 });
+  }
+
+  function setRadius(v) {
+    mapState.radius = v;
+    $$("[data-radius]").forEach((x) => { const on = x.dataset.radius === v; x.classList.toggle("is-on", on); x.setAttribute("aria-checked", on); });
+  }
+
+  function bindMap() {
+    if (!window.L || !window.L.map) {
+      $("#mx-map").innerHTML = `<div class="hint">${icon("info")}<p>${esc(t("map.noLib"))}</p></div>`;
+      renderMapResults();
+      return;
+    }
+    const LF = window.L;
+    LM = LF.map("mx-map", { zoomControl: false, minZoom: 7, maxZoom: 16, maxBounds: [[44.2, 23.8], [49.8, 33.8]], maxBoundsViscosity: 0.8, zoomSnap: 0.5, attributionControl: true });
+    LF.control.zoom({ position: "bottomleft", zoomInTitle: "+", zoomOutTitle: "−" }).addTo(LM);
+    LM.fitBounds(MD_BOUNDS, fitOpts());
+    LM.attributionControl.setPrefix(false);
+    const theme = document.documentElement.dataset.theme;
+    const dark = theme ? theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    LF.tileLayer("https://{s}.basemaps.cartocdn.com/" + (dark ? "dark_all" : "light_all") + "/{z}/{x}/{y}{r}.png", {
+      subdomains: "abcd", maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'
+    }).addTo(LM);
+    // Dim everything outside Moldova and draw its border, so the region reads clearly (also without map tiles).
+    const outline = window.MOLDOVA_OUTLINE || [];
+    if (outline.length) {
+      LF.polygon([[[-85, -180], [-85, 180], [85, 180], [85, -180]]].concat(outline), { className: "mx-mask", stroke: false, fillOpacity: 0.6, interactive: false }).addTo(LM);
+      LF.polygon(outline, { className: "mx-border", weight: 2, fill: false, interactive: false }).addTo(LM);
+    }
+    // Town labels: main towns always, every district centre when zoomed in.
+    const major = ["chisinau", "balti", "cahul", "soroca", "orhei", "ungheni", "gagauzia", "stinga"];
+    DISTRICTS.forEach((d) => {
+      const name = d.id === "gagauzia" ? "Comrat" : d.id === "stinga" ? "Tiraspol" : d.id === "dubasari" ? "Cocieri" : d.name.replace(" (Tighina)", "");
+      LF.marker(d.c, { interactive: false, keyboard: false, icon: LF.divIcon({ className: "town" + (major.includes(d.id) ? " town--major" : ""), html: `<span>${esc(name)}</span>`, iconSize: null }) }).addTo(LM);
+    });
+    const zoomClass = () => LM.getContainer().classList.toggle("is-far", LM.getZoom() < 8.5);
+    LM.on("zoomend", zoomClass); zoomClass();
+
+    markerLayer = LF.layerGroup().addTo(LM);
+    LM.on("click", (e) => { if (mapState.pinMode) placeDraft(e.latlng); });
+
+    // panel controls
+    $("#mx-loc-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = norm($("#mx-loc").value).trim();
+      const status = $("#mx-status");
+      if (v.length < 2) { status.textContent = t("map.locShort"); return; }
+      const d = DISTRICTS.find((x) => norm(x.name).startsWith(v)) || DISTRICTS.find((x) => x.loc.some((l) => norm(l).startsWith(v))) || DISTRICTS.find((x) => norm(x.name).includes(v) || x.loc.some((l) => norm(l).includes(v)));
+      if (!d) { status.textContent = t("map.locNone"); return; }
+      const geo = window.OPP_GEO || {};
+      const exact = OPPS.find((o) => o.locality && norm(o.locality) === v && geo[o.id]);
+      mapState.center = exact ? geo[exact.id] : d.c;
+      mapState.centerLabel = $("#mx-loc").value.trim();
+      if (mapState.radius === "all") setRadius("25");
+      status.textContent = t("map.centered", { d: d.name });
+      renderMapResults(true);
+    });
+    $("#mx-geo").addEventListener("click", locateOnMap);
+    $$("[data-radius]").forEach((b) => b.addEventListener("click", () => { setRadius(b.dataset.radius); renderMapResults(!!mapState.center); }));
+    $$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+      mapState.tab = b.dataset.tab;
+      $$("[data-tab]").forEach((x) => { const on = x === b; x.classList.toggle("is-on", on); x.setAttribute("aria-selected", on); });
+      $$(".mx-pane").forEach((p) => (p.hidden = p.id !== "mx-pane-" + mapState.tab));
+    }));
+    $$("[data-date]").forEach((b) => b.addEventListener("click", () => {
+      mapState.date = b.dataset.date;
+      $$("[data-date]").forEach((x) => { const on = x === b; x.classList.toggle("is-on", on); x.setAttribute("aria-pressed", on); });
+      renderMapResults();
+    }));
+    $$("[data-cat]", $(".mx-panel")).forEach((b) => b.addEventListener("click", () => {
+      const i = mapState.cats.indexOf(b.dataset.cat);
+      if (i >= 0) mapState.cats.splice(i, 1); else mapState.cats.push(b.dataset.cat);
+      b.classList.toggle("is-on", i < 0); b.setAttribute("aria-pressed", i < 0);
+      renderMapResults();
+    }));
+    $("#mx-free").addEventListener("change", (e) => { mapState.free = e.target.checked; renderMapResults(); });
+    $("#mx-q").addEventListener("input", (e) => { mapState.q = e.target.value; renderMapResults(); });
+    $("#mx-reset").addEventListener("click", () => {
+      Object.assign(mapState, { q: "", center: null, centerLabel: "", radius: "all", date: "all", cats: [], free: false });
+      $("#mx-loc").value = ""; $("#mx-q").value = ""; $("#mx-free").checked = false; $("#mx-status").textContent = "";
+      setRadius("all");
+      $$("[data-date]").forEach((x) => { const on = x.dataset.date === "all"; x.classList.toggle("is-on", on); x.setAttribute("aria-pressed", on); });
+      $$(".mx-cat").forEach((x) => { x.classList.remove("is-on"); x.setAttribute("aria-pressed", false); });
+      renderMapResults();
+      LM.flyToBounds(MD_BOUNDS, Object.assign(fitOpts(), { duration: reduceMotion() ? 0 : 0.6 }));
+    });
+    $("#mx-pin").addEventListener("click", startPinMode);
+    $("#mx-pin-cancel").addEventListener("click", stopPinMode);
+
+    renderMapResults();
+    if (mapState.selected && findItem(mapState.selected)) selectItem(mapState.selected, true);
+    else mapState.selected = null;
+    // Leaflet measures its box once; re-measure after layout settles.
+    setTimeout(() => LM && LM.invalidateSize(), 60);
+  }
+
+  function destroyMap() {
+    if (LM) { LM.remove(); LM = null; markerLayer = null; radiusLayer = null; draftMarker = null; }
+    mapState.pinMode = false;
+  }
+
   /* ------------------------------------------------------------------ router */
   const ROUTES = {
     "": ["home", "nav.home"],
     explore: ["explore", "nav.explore"],
     regions: ["regions", "nav.regions"],
+    map: ["map", "nav.map"],
     events: ["events", "nav.events"],
     about: ["about", "nav.about"],
     contact: ["contact", "nav.contact"],
@@ -871,6 +1375,8 @@
     const route = ROUTES[name] || ROUTES[""];
     const viewName = route[0];
     const main = $("#app");
+    destroyMap();
+    document.body.classList.toggle("on-map", viewName === "map");
     main.innerHTML = views[viewName](params, arg);
 
     // page title
@@ -890,6 +1396,7 @@
     if (viewName === "explore") bindExplore();
     if (viewName === "regions") bindRegions(params);
     if (viewName === "events") bindEvents();
+    if (viewName === "map") bindMap();
     if (viewName === "detail") bindDetail();
     if (viewName === "contact") bindForm($("#contact-form"), "opp.messages", t("contact.sent"));
     if (viewName === "share") bindForm($("#share-form"), "opp.submissions", t("shareForm.sent"));

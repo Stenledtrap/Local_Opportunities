@@ -22,7 +22,9 @@ To host it on GitHub Pages, go to **Settings → Pages → Deploy from branch** 
 | `css/styles.css` | Design tokens (blue / green / yellow / red), light & dark themes, responsive layout |
 | `js/data.js` | **Content**: site settings, all Moldovan districts, categories, opportunities, gallery |
 | `js/i18n.js` | All interface text in Romanian (default) and English |
-| `js/app.js` | Router and pages: Home, Explore, Regions, Events calendar, Opportunity details, About, Contact, Share an opportunity |
+| `js/app.js` | Router and pages: Home, Explore, Regions, Map, Events calendar, Opportunity details, About, Contact, Share an opportunity |
+| `js/moldova-outline.js` | Moldova border for the map (simplified from Natural Earth 1:10m via `world-atlas`) |
+| `vendor/leaflet/` | Leaflet 1.9.4 map library (BSD-2-Clause), kept locally so the map has no CDN dependency |
 | `assets/img/` | Photos taken from *Local Opportunities.pdf* |
 
 ## Content rules
@@ -30,6 +32,15 @@ To host it on GitHub Pages, go to **Settings → Pages → Deploy from branch** 
 - The 15 activities come from *Local Opportunities.pdf*. Anything the PDF lists as "to be confirmed" (dates, times, organisers, contacts, deadlines, costs, what's covered) is stored as `null`. The site shows these as **"De confirmat / To be confirmed"** and never makes up values.
 - Listings with `source: "demo"` are demonstration examples that show online and international entries. The site labels them **"Exemplu demonstrativ / Demo example"**.
 - Gallery photos are past events shown for inspiration. Their captions only repeat what is visible in the images.
+
+## Interactive map (`#/map`)
+
+- **Left panel:** location search (village, town or district), "use my location", search radius, and filters by date, type, cost and keyword. Below them is the list of matching events.
+- **Map:** one pin per in-person opportunity. Pins that share a town fan out so each one can be tapped. The area outside Moldova is dimmed, and Moldova's border is always drawn, so the region still reads clearly if map tiles fail to load.
+- **Right panel:** details of the selected event, with a Share tab, an "I'm interested" toggle and a link to the full page. On phones, this panel becomes a bottom sheet.
+- **Pin an event:** tap the button, tap the map inside Moldova, drag the pin to adjust it, then fill in the form. New pins show as "under review". For now they are saved only in the visitor's browser; to share them with everyone, connect a backend.
+- Map pin coordinates live in `js/data.js` → `OPP_GEO`.
+- The map tiles are © OpenStreetMap contributors © CARTO, and the credit is shown on the map.
 
 ## Adding or updating an opportunity
 

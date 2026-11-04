@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -25,6 +26,7 @@
         <a href="#/" data-nav="" data-i18n="nav.home">Acasă</a>
         <a href="#/explore" data-nav="explore" data-i18n="nav.explore">Explorează oportunități</a>
         <a href="#/regions" data-nav="regions" data-i18n="nav.regions">Regiuni</a>
+        <a href="#/map" data-nav="map" data-i18n="nav.map">Hartă</a>
         <a href="#/events" data-nav="events" data-i18n="nav.events">Evenimente</a>
         <a href="#/about" data-nav="about" data-i18n="nav.about">Despre noi</a>
         <a href="#/contact" data-nav="contact" data-i18n="nav.contact">Contact</a>
@@ -54,6 +56,7 @@
       <a href="#/" data-nav="" data-i18n="nav.home">Acasă</a>
       <a href="#/explore" data-nav="explore" data-i18n="nav.explore">Explorează oportunități</a>
       <a href="#/regions" data-nav="regions" data-i18n="nav.regions">Regiuni</a>
+      <a href="#/map" data-nav="map" data-i18n="nav.map">Hartă</a>
       <a href="#/events" data-nav="events" data-i18n="nav.events">Evenimente</a>
       <a href="#/about" data-nav="about" data-i18n="nav.about">Despre noi</a>
       <a href="#/contact" data-nav="contact" data-i18n="nav.contact">Contact</a>
@@ -77,6 +80,7 @@
         <h2 class="footer__h" data-i18n="footer.explore"></h2>
         <a href="#/explore" data-i18n="nav.explore"></a>
         <a href="#/regions" data-i18n="nav.regions"></a>
+        <a href="#/map" data-i18n="nav.map"></a>
         <a href="#/events" data-i18n="nav.events"></a>
       </div>
       <div>
@@ -100,6 +104,8 @@
 
   <noscript><p style="padding:24px;font-family:sans-serif">OPPORTUNITIES needs JavaScript to show opportunities. / Activați JavaScript pentru a vedea oportunitățile.</p></noscript>
 
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/moldova-outline.js"></script>
   <script src="js/data.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>

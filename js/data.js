@@ -533,3 +533,23 @@ window.GALLERY = [
   { src: "assets/img/act2-castel-mimi.jpg",    ro: "ACT II · Castel Mimi",                       en: "ACT II · Castel Mimi" },
   { src: "assets/img/concert-cahul.jpg",       ro: "Concert în aer liber · Cahul",               en: "Open-air concert · Cahul" }
 ];
+
+/* Map positions [lat, lon] for in-person opportunities: the locality centre,
+   approximate to a few hundred metres. Exact venues are confirmed by organisers. */
+window.OPP_GEO = {
+  "youth-creative-workshop-ustia":  [47.330, 29.085],
+  "clean-community-molovata":       [47.258, 29.128],
+  "youth-leadership-criuleni":      [47.213, 29.159],
+  "discover-your-career-orhei":     [47.384, 28.824],
+  "photography-creativity-orhei":   [47.384, 28.824],
+  "project-writing-ialoveni":       [46.943, 28.782],
+  "digital-skills-anenii-noi":      [46.879, 29.231],
+  "volunteer-day-causeni":          [46.637, 29.411],
+  "erasmus-info-ungheni":           [47.211, 27.800],
+  "debate-club-ungheni":            [47.211, 27.800],
+  "entrepreneurship-cahul":         [45.904, 28.194],
+  "international-fair-cahul":       [45.904, 28.194],
+  "cultural-heritage-soroca":       [48.157, 28.297],
+  "innovation-forum-hincesti":      [46.828, 28.591],
+  "youth-exchange-info-balti":      [47.762, 27.929]
+};
