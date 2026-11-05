@@ -1349,6 +1349,37 @@
     mapState.pinMode = false;
   }
 
+  /* ------------------------------------------------------------------ flower decorations */
+  // Evelina's flower drawing: one large flower beside each page title, small ones scattered at section edges.
+  function seeded(seed) {
+    let a = 0; for (let i = 0; i < seed.length; i++) a = (a * 31 + seed.charCodeAt(i)) | 0;
+    return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function flowerImg(cls, vars, src) {
+    const style = Object.entries(vars).map(([k, v]) => `--${k}:${v}`).join(";");
+    return `<img class="flw ${cls}" src="${src || "assets/img/flower-sm.webp"}" alt="" aria-hidden="true" decoding="async" style="${style}">`;
+  }
+  function decorate(routeName) {
+    const main = $("#app");
+    // large flower next to the page title
+    const big = (host, cls) => { if (host && !$(".flw-big", host)) host.insertAdjacentHTML("beforeend", flowerImg("flw-big " + cls, {}, "assets/img/flower.webp")); };
+    big($(".hero__grid", main), "flw-big--hero");
+    $$(".page-head .wrap, .detail-hero .wrap", main).forEach((w) => { w.parentElement.classList.add("has-flower"); big(w, "flw-big--head"); });
+    const mh = $(".mx-head", main); if (mh) { mh.classList.add("has-flower"); big(mh, "flw-big--map"); }
+    // small flowers around the page, each with its own size, angle and direction
+    const rnd = seeded("opp-" + routeName);
+    const r = (a, b) => a + (b - a) * rnd();
+    $$("#app > section", main).forEach((sec, i) => {
+      if (sec.matches(".hero, .page-head, .detail-hero")) return;
+      sec.classList.add("has-petals");
+      const left = (i + Math.round(rnd())) % 2 === 0;
+      const side = left ? "left" : "right", other = left ? "right" : "left";
+      const corner = flowerImg(`flw-sm flw--${side}`, { s: Math.round(r(34, 52)) + "px", r: Math.round(r(-35, 35)) + "deg", fx: rnd() > 0.5 ? -1 : 1, y: Math.round(r(4, 16)) + "px", x: r(1, 5).toFixed(1) + "%" });
+      const mid = flowerImg(`flw-sm flw--wide flw--${other}`, { s: Math.round(r(40, 70)) + "px", r: Math.round(r(-40, 40)) + "deg", fx: rnd() > 0.5 ? -1 : 1, y: Math.round(r(38, 72)) + "%", x: Math.round(r(10, 28)) + "px" });
+      sec.insertAdjacentHTML("afterbegin", corner + mid);
+    });
+  }
+
   /* ------------------------------------------------------------------ router */
   const ROUTES = {
     "": ["home", "nav.home"],
@@ -1392,6 +1423,7 @@
     });
 
     // bind view
+    decorate(name || "home");
     if (viewName === "home") bindHome();
     if (viewName === "explore") bindExplore();
     if (viewName === "regions") bindRegions(params);
