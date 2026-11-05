@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Outlast</title>
+  <meta name="description" content="Clear, checked survival skills: step-by-step guides, gear checklists, scenarios and a community forum.">
+  <meta name="theme-color" content="#2c6a37" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c4527" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700;800&display=swap">
+  <link rel="stylesheet" href="css/outlast.css">
+</head>
+<body>
+  <a class="skip" href="#app" data-t="skip">Skip to content</a>
+
+  <header class="header contours">
+    <div class="header__bar">
+      <button class="icon-btn" id="burger" type="button" aria-controls="drawer" aria-expanded="false" data-t-aria="menu" aria-label="Menu">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <a class="logo" href="#/" aria-label="Outlast">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="#fff" stroke-width="2"/><path d="M16 2v3M16 27v3M2 16h3M27 16h3" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M16 7.5 11 15h2.6L10 20.5h12L18.4 15H21Z" fill="#fff"/><path d="M16 20.5V24" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>OUTLAST</span>
+      </a>
+      <div class="hsearch" role="search">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <label class="sr-only" for="q" data-t="searchLabel">Search</label>
+        <input id="q" type="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sres" aria-autocomplete="list" data-t-ph="search" placeholder="Search">
+        <ul class="sresults" id="sres" role="listbox" hidden></ul>
+      </div>
+      <div class="lang" role="group" data-t-aria="lang" aria-label="Language">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="pl" aria-pressed="false">PL</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="drawer" id="drawer" hidden>
+    <div class="drawer__scrim" id="drawer-scrim"></div>
+    <aside class="drawer__panel" role="dialog" aria-modal="true" data-t-aria="menu" aria-label="Menu">
+      <div class="drawer__head contours">
+        <button class="icon-btn" id="drawer-close" type="button" data-t-aria="close" aria-label="Close menu">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+        <span class="logo"><span>OUTLAST</span></span>
+      </div>
+      <nav id="drawer-nav" aria-label="Main"></nav>
+    </aside>
+  </div>
+
+  <main id="app" tabindex="-1"></main>
+
+  <noscript><p style="padding:20px">Outlast needs JavaScript to show its guides.</p></noscript>
+  <script src="js/diagrams.js"></script>
+  <script src="js/guides.js"></script>
+  <script src="js/content.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
