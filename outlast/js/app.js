@@ -21,14 +21,14 @@
       playGame: "Play", sourcesShow: "Sources", hot: "Hot", newest: "New", top: "Top", all: "All", example: "Example", comments: "{n} comments", comments1: "1 comment", comment: "Comment",
       upvote: "Upvote", downvote: "Downvote", writePost: "Start a thread", feedEmpty: "No threads yet in this category.", shareYours: "What have you learned outside?",
       continue: "Continue", pathDone: "Done", draftShort: "Draft · checked against the sources below", skillsList: "Browse by skill", guidesN: "{n} guides", popular: "Most used",
-      gamesN: "{n} games", heroTitle: "Learn it here. Use it out there.", heroLead: "Survival skills you can practise, in plain steps." },
+      theme: "Theme", themeLight: "Light", themeDark: "Dark", themeAuto: "Auto", gamesN: "{n} games", heroTitle: "Learn it here. Use it out there.", heroLead: "Survival skills you can practise, in plain steps." },
     pl: { needNow: "Czego potrzebujesz teraz?", askFlint: "Zapytaj Flinta", askFlintSub: "Twój przewodnik odpowiada", scenarioSub: "Zaplanuj, co może pójść nie tak",
       steps3: "Kroki: {n}", start: "Start", practice: "Ćwiczenia", practiceLead: "Krótkie gry, które utrwalają każdą umiejętność.", miniGames: "Mini-gry",
       allSteps: "Wszystkie kroki", oneByOne: "Krok po kroku", stepOf: "{n} / {t}", needTap: "Zaznacz, co masz spakowane", knots: "Warsztat węzłów", tryIt: "Wypróbuj",
       playGame: "Graj", sourcesShow: "Źródła", hot: "Gorące", newest: "Nowe", top: "Najlepsze", all: "Wszystko", example: "Przykład", comments: "Komentarze: {n}", comments1: "1 komentarz", comment: "Skomentuj",
       upvote: "Głos w górę", downvote: "Głos w dół", writePost: "Załóż wątek", feedEmpty: "W tej kategorii nie ma jeszcze wątków.", shareYours: "Czego nauczyłeś się w terenie?",
       continue: "Dalej", pathDone: "Gotowe", draftShort: "Wersja robocza · sprawdzona ze źródłami poniżej", skillsList: "Umiejętności", guidesN: "Poradniki: {n}", popular: "Najczęściej czytane",
-      gamesN: "Gry: {n}", heroTitle: "Naucz się tu. Użyj w terenie.", heroLead: "Umiejętności przetrwania do przećwiczenia, krok po kroku." }
+      theme: "Motyw", themeLight: "Jasny", themeDark: "Ciemny", themeAuto: "Auto", gamesN: "Gry: {n}", heroTitle: "Naucz się tu. Użyj w terenie.", heroLead: "Umiejętności przetrwania do przećwiczenia, krok po kroku." }
   };
   ["en", "pl"].forEach((l) => Object.assign(O.ui[l], X[l]));
 
@@ -571,13 +571,26 @@
       <button type="button" class="dlink dlink--btn" data-open-chat="">${icon("user")}<span>${esc(t("askFlint"))}</span></button>
       <hr>
       ${a("#/skills", "check", t("skills"))}
-      ${group("info", "info", t("info"), a("#/about", "", t("about")) + a("#/safety", "", t("safety")))}`;
+      ${group("info", "info", t("info"), a("#/about", "", t("about")) + a("#/safety", "", t("safety")))}
+      <div class="theme-switch"><span class="theme-switch__label" id="theme-label">${esc(t("theme"))}</span>
+        <div class="seg" role="radiogroup" aria-labelledby="theme-label">
+          ${[["light", "sun", t("themeLight")], ["dark", "moon", t("themeDark")], ["auto", "", t("themeAuto")]].map(([k, ic, l]) => `<button type="button" role="radio" data-theme-set="${k}" aria-checked="${theme === k}">${ic ? icon(ic) : ""}${esc(l)}</button>`).join("")}
+        </div></div>`;
+  }
+  /* light / dark / follow the device */
+  let theme = store.get("theme", "auto");
+  function applyTheme(k) {
+    theme = k; store.set("theme", k);
+    if (k === "light" || k === "dark") document.documentElement.dataset.theme = k;
+    else document.documentElement.removeAttribute("data-theme");
+    $$("[data-theme-set]").forEach((b) => b.setAttribute("aria-checked", b.dataset.themeSet === k));
   }
   let lastFocus = null;
   function openDrawer() {
     const d = $("#drawer");
     $("#drawer-nav").innerHTML = drawerHtml();
     $$("#drawer-nav details").forEach((el) => el.addEventListener("toggle", () => store.set("drawerOpen", $$("#drawer-nav details[open]").map((x) => x.dataset.group))));
+    $$("[data-theme-set]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themeSet)));
     lastFocus = document.activeElement;
     d.hidden = false;
     requestAnimationFrame(() => d.classList.add("is-open"));
