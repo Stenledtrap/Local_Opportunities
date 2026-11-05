@@ -1,6 +1,6 @@
 /* Outlast offline support: keep a copy of every page file so guides open without signal. */
-const VERSION = "outlast-v1";
-const FILES = ["./", "index.html", "css/outlast.css", "js/diagrams.js", "js/guides.js", "js/content.js", "js/ui.js", "js/app.js", "assets/logo.svg", "manifest.webmanifest"];
+const VERSION = "outlast-v2";
+const FILES = ["./", "index.html", "css/outlast.css", "js/diagrams.js", "js/guides.js", "js/content.js", "js/forum-seed.js", "js/games.js", "js/ui.js", "js/chat.js", "js/app.js", "assets/logo.svg", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
